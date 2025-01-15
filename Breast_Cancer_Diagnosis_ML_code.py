@@ -27,7 +27,7 @@ import shap
 import os
 
 # Set the path to save the images
-save_path = r'C:\Users\JUDIT\Desktop\Data Sets'
+save_path = "datasets"
 
 # 1. Data Loading and Overview
 file_path = os.path.join(save_path, 'data.csv')
@@ -82,7 +82,7 @@ plt.ylabel('Feature', fontsize=12)
 plt.xticks(fontsize=10)
 plt.yticks(fontsize=10)
 plt.savefig(os.path.join(save_path, 'rf_feature_importance.png'))
-plt.show()
+plt.close()
 
 # 5. Model Development and Evaluation
 kf = KFold(n_splits=5, shuffle=True, random_state=42)
@@ -91,25 +91,28 @@ models = {
     'Logistic Regression': LogisticRegression(max_iter=10000),
     'Random Forest': RandomForestClassifier(random_state=42),
     'Support Vector Machine': SVC(probability=True),
-    'XGBoost': XGBClassifier(eval_metric='logloss', n_jobs=-1)
+    'XGBoost': XGBClassifier(random_state=42, use_label_encoder=False, eval_metric='logloss')
 }
 
 def train_evaluate_model(model_name, model, X_train, y_train, X_test, y_test, kf):
-    param_grid = {}
-    if model_name == 'Logistic Regression':
-        param_grid = {'C': [0.01, 0.1, 1, 10, 100]}
-    elif model_name == 'Random Forest':
-        param_grid = {'n_estimators': [50, 100, 200], 'max_depth': [None, 10, 20, 30]}
-    elif model_name == 'Support Vector Machine':
-        param_grid = {'C': [0.01, 0.1, 1, 10], 'kernel': ['linear', 'rbf']}
-    elif model_name == 'XGBoost':
-        param_grid = {'learning_rate': [0.01, 0.1, 0.3], 'n_estimators': [50, 100, 200]}
+    # Special handling for XGBoost
+    if model_name == 'XGBoost':
+        # Train XGBoost directly without GridSearchCV
+        model.fit(X_train, y_train)
+        best_model = model
+    else:
+        param_grid = {}
+        if model_name == 'Logistic Regression':
+            param_grid = {'C': [0.01, 0.1, 1, 10, 100]}
+        elif model_name == 'Random Forest':
+            param_grid = {'n_estimators': [50, 100, 200], 'max_depth': [None, 10, 20, 30]}
+        elif model_name == 'Support Vector Machine':
+            param_grid = {'C': [0.01, 0.1, 1, 10], 'kernel': ['linear', 'rbf']}
 
-    grid_search = GridSearchCV(model, param_grid, cv=kf, scoring='roc_auc', n_jobs=-1)
-    grid_search.fit(X_train, y_train)
-    best_model = grid_search.best_estimator_
-
-    print(f"Best Parameters for {model_name}: {grid_search.best_params_}")
+        grid_search = GridSearchCV(model, param_grid, cv=kf, scoring='roc_auc', n_jobs=-1)
+        grid_search.fit(X_train, y_train)
+        best_model = grid_search.best_estimator_
+        print(f"Best Parameters for {model_name}: {grid_search.best_params_}")
 
     # Predictions
     y_pred = best_model.predict(X_test)
@@ -122,7 +125,7 @@ def train_evaluate_model(model_name, model, X_train, y_train, X_test, y_test, kf
     roc_auc = roc_auc_score(y_test, y_pred_proba)
     print(f"{model_name} ROC-AUC Score: {roc_auc:.2f}")
 
-    # ROC Curve - With Grid Lines
+    # ROC Curve
     fpr, tpr, _ = roc_curve(y_test, y_pred_proba)
     plt.figure()
     plt.plot(fpr, tpr, label=f'{model_name} (area = {roc_auc:.2f})', color='blue')
@@ -133,15 +136,16 @@ def train_evaluate_model(model_name, model, X_train, y_train, X_test, y_test, kf
     plt.title(f'ROC Curve - {model_name}', fontsize=14)
     plt.legend(loc="lower right", fontsize=12)
     plt.savefig(os.path.join(save_path, f'roc_curve_{model_name}.png'))
-    plt.show()
+    plt.close()
 
-    # Confusion Matrix - Updated Color Scheme
+    # Confusion Matrix
     cm = confusion_matrix(y_test, y_pred)
     disp = ConfusionMatrixDisplay(confusion_matrix=cm)
-    disp.plot(cmap='viridis')
+    fig, ax = plt.subplots()
+    disp.plot(cmap='viridis', ax=ax)
     plt.title(f'Confusion Matrix - {model_name}', fontsize=14)
     plt.savefig(os.path.join(save_path, f'confusion_matrix_{model_name}.png'))
-    plt.show()
+    plt.close()
 
     return best_model
 
@@ -155,12 +159,12 @@ explainer = shap.TreeExplainer(best_models['XGBoost'])
 shap_values = explainer.shap_values(X_test)
 
 # SHAP Summary Plot
-shap.summary_plot(shap_values, X_test, feature_names=numeric_features)
+shap.summary_plot(shap_values, X_test, feature_names=numeric_features, show=False)
 plt.title('SHAP Summary Plot for XGBoost', fontsize=14)
 plt.xticks(fontsize=10)
 plt.yticks(fontsize=10)
 plt.savefig(os.path.join(save_path, 'shap_summary_xgboost.png'))
-plt.show()
+plt.close()
 
 # Conclusion:
 # - All four models performed well, with ROC-AUC scores close to 1.00.
